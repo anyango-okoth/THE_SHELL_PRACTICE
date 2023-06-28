@@ -1,0 +1,105 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include "main.h"
+
+void executeCommand(char *args[], char *envp[]) {
+    if (args[0] != NULL) {
+        if (strcmp(args[0], "cd") == 0) {
+            /* Handle the cd command */
+          
+        } else {
+            pid_t pid = fork();
+            if (pid < 0) {
+                fprintf(stderr, "Fork failed\n");
+                exit(EXIT_FAILURE);
+            } else if (pid == 0) {
+                /* Child process */
+                execvp(args[0], args);
+                fprintf(stderr, "Failed to execute command\n");
+                exit(EXIT_FAILURE);
+            } else {
+                /* Parent process */
+                int status;
+                waitpid(pid, &status, 0);
+                if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+                    /* Command executed successfully */
+                } else {
+                    /* Command execution failed */
+                    fprintf(stderr, "Command execution failed\n");
+                }
+            }
+        }
+    }
+}
+
+void handleCommandSeparators(char *args[], char *envp[]) {
+    int i = 0;
+    while (args[i] != NULL) {
+        char *command = args[i];
+
+        if (strcmp(command, ";") == 0) {
+            args[i] = NULL;  /* Terminate the command at the separator */
+
+            /* Execute the command before the separator */
+            executeCommand(args, envp);
+
+            /* Move the pointer to the next command after the separator */
+            args = &args[i + 1];
+            i = -1;  /* Start from the beginning of the new command */
+        } else if (strcmp(command, "&&") == 0) {
+            args[i] = NULL;  /* Terminate the command at the operator */
+
+            /* Execute the command before the operator */
+            executeCommand(args, envp);
+
+            /* Move the pointer to the next command after the operator */
+            args = &args[i + 1];
+            if (args[0] != NULL) {
+                i = -1;  /* Start from the beginning of the new command */
+            } else {
+                break;  /* No more commands to execute */
+            }
+        } else if (strcmp(command, "||") == 0) {
+            args[i] = NULL;  /* Terminate the command at the operator */
+
+            /* Execute the command before the operator */
+            executeCommand(args, envp);
+
+            /* Move the pointer to the next command after the operator */
+            args = &args[i + 1];
+            if (args[0] != NULL) {
+                int status;
+                pid_t pid = fork();
+                if (pid < 0) {
+                    fprintf(stderr, "Fork failed\n");
+                    exit(EXIT_FAILURE);
+                } else if (pid == 0) {
+                    /* Child process */
+                    execvp(args[0], args);
+                    fprintf(stderr, "Failed to execute command\n");
+                    exit(EXIT_FAILURE);
+                } else {
+                    /* Parent process */
+                    waitpid(pid, &status, 0);
+                    if (!(WIFEXITED(status) && WEXITSTATUS(status) == 0)) {
+                        /* Command execution failed */
+                        fprintf(stderr, "Command execution failed\n");
+                    }
+                }
+            } else {
+                break;  /* No more commands to execute */
+            }
+        }
+
+        i++;
+    }
+
+    /* Execute the last command after the last separator or operator */
+            executeCommand(args, envp);
+}
+(void)envp; /* Avoid "unused parameter" warning */
+}
